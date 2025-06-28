@@ -1,0 +1,14 @@
+filippo.io/edwards25519 v1.1.0/go.mod h1:BxyFTGdWcka3PhytdK4V28tE5sGfRvvvRV7EaN4VDT4=
+github.com/flimzy/anki v0.0.0-20191116175829-03460c56b85c h1:ynXGIV3daQbuf9IJqnuSTgRZV8alfTDyefZBlnpmNb0=
+github.com/flimzy/anki v0.0.0-20191116175829-03460c56b85c/go.mod h1:XKPgKe6Wl+5STCiCsh49vIouHDgSd5qWy3hJ1eM+8+w=
+github.com/flimzy/go-sql.js v0.0.0-20170413005827-c7e22c0fd6e9 h1:rAjGCKhKN+iStQ250cH9J9vtW9ch8/g0SXaq7Hrz4aI=
+github.com/flimzy/go-sql.js v0.0.0-20170413005827-c7e22c0fd6e9/go.mod h1:N12LGw7VcXxCm94kw4ePQPPnADHUqopSEO54v/jMERc=
+github.com/go-sql-driver/mysql v1.8.1/go.mod h1:wEBSXgmK//2ZFJyE+qWnIsVGmvmEKlqwuVSjsCm7DZg=
+github.com/gopherjs/gopherjs v1.17.2 h1:fQnZVsXk8uxXIStYb0N4bGk7jeyTalG/wsZjQ25dO0g=
+github.com/gopherjs/gopherjs v1.17.2/go.mod h1:pRRIvn/QzFLrKfvEz3qUuEhtE/zLCWfreZ6J5gM2i+k=
+github.com/jmoiron/sqlx v1.4.0 h1:1PLqN7S1UYp5t4SrVVnt4nUVNemrDAtxlulVe+Qgm3o=
+github.com/jmoiron/sqlx v1.4.0/go.mod h1:ZrZ7UsYB/weZdl2Bxg6jCRO9c3YHl8r3ahlKmRT4JLY=
+github.com/lib/pq v1.10.9/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
+github.com/mattn/go-sqlite3 v1.14.22/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
+github.com/mattn/go-sqlite3 v1.14.28 h1:ThEiQrnbtumT+QMknw63Befp/ce/nUPgBPMlRFEum7A=
+github.com/mattn/go-sqlite3 v1.14.28/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
