@@ -1,9 +1,11 @@
 package main
 
 import (
+	"archive/zip"
 	"fmt"
-
-	"github.com/flimzy/anki"
+	"io"
+	"os"
+	// "github.com/flimzy/anki"
 )
 
 const (
@@ -13,17 +15,61 @@ const (
 func main() {
 	fmt.Println("ANKI Ollama Translate v" + version)
 
-	akpg, err := anki.ReadFile("test.apkg")
-	if err != nil {
+	if err := unzipFile("test.apkg", "test"); err != nil {
 		fmt.Println(err)
 		return
 	}
-	defer akpg.Close()
 
-	collection, err := akpg.Collection()
+	// akpg, err := anki.ReadFile("test.apkg")
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// defer akpg.Close()
+
+	// collection, err := akpg.Collection()
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	return
+	// }
+	// fmt.Println(collection)
+}
+
+func unzipFile(src, dest string) error {
+	zipReader, err := zip.OpenReader(src)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
-	fmt.Println(collection)
+	defer zipReader.Close()
+
+	for _, file := range zipReader.File {
+		if file.FileInfo().IsDir() {
+			continue
+		}
+		fileReader, err := file.Open()
+		if err != nil {
+			return err
+		}
+		defer fileReader.Close()
+
+		if _, err := os.Stat(dest); err != nil {
+			if os.IsNotExist(err) {
+				if err := os.MkdirAll(dest, 0755); err != nil {
+					return err
+				}
+			}
+		}
+
+		fileWriter, err := os.Create(dest + "/" + file.Name)
+		if err != nil {
+			return err
+		}
+		defer fileWriter.Close()
+
+		_, err = io.Copy(fileWriter, fileReader)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
