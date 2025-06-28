@@ -13,10 +13,17 @@ const (
 func main() {
 	fmt.Println("ANKI Ollama Translate v" + version)
 
-	a, err := anki.ReadFile("test.apkg")
+	akpg, err := anki.ReadFile("test.apkg")
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	fmt.Println(a.Cards)
+	defer akpg.Close()
+
+	collection, err := akpg.Collection()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	fmt.Println(collection)
 }
