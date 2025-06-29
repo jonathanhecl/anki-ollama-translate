@@ -17,12 +17,12 @@ var fieldSelected int8 = -1
 
 func main() {
 	const (
-		origApkg         = "Japanese_N5_MLT.apkg"
+		origApkg         = "test.apkg"
 		tempDB           = "collection_temp.anki2"
 		exportedEN       = "output_en.txt"
 		translatedES     = "output_es.txt"
 		newApkgOutput    = "deck_traducido.apkg"
-		fieldToTranslate = "Back lower English"
+		fieldToTranslate = "Front"
 	)
 
 	// Paso 1: descomprimir el archivo APKG y extraer collection.anki2
@@ -54,19 +54,28 @@ func main() {
 		panic(err)
 	}
 
+	listFields := []string{}
+
 	for _, modelData := range models {
 		model := modelData.(map[string]interface{})
+		fmt.Println(model["name"])
 		fields := model["flds"].([]interface{})
 		for i, f := range fields {
 			name := f.(map[string]interface{})["name"].(string)
+			listFields = append(listFields, fmt.Sprintf("[%s] %d = %s", model["name"].(string), i, name))
 			if name == fieldToTranslate {
 				fieldSelected = int8(i)
+				break
 			}
 		}
 	}
 
 	if fieldSelected == -1 {
 		fmt.Println("❌ No se encontró el campo a traducir:", fieldToTranslate)
+		fmt.Println("Los campos disponibles son:")
+		for _, v := range listFields {
+			fmt.Println(v)
+		}
 		os.Exit(1)
 	}
 
@@ -129,6 +138,8 @@ func extractReverses(db *sql.DB, outFile string) {
 			continue
 		}
 		fields := strings.Split(flds, "\x1f")
+		fmt.Println(fields)
+		break
 		if len(fields) > 1 {
 			lines = append(lines, fields[fieldSelected])
 		} else {
