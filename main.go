@@ -19,8 +19,8 @@ func main() {
 	const (
 		origApkg         = "Japanese_N5_MLT.apkg"
 		tempDB           = "collection_temp.anki2"
-		exportedEN       = "explicaciones_en.txt"
-		translatedES     = "explicaciones_es.txt"
+		exportedEN       = "output_en.txt"
+		translatedES     = "output_es.txt"
 		newApkgOutput    = "deck_traducido.apkg"
 		fieldToTranslate = "Back lower English"
 	)
