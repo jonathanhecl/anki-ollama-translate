@@ -4,22 +4,25 @@ import (
 	"archive/zip"
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 
 	_ "modernc.org/sqlite"
 )
 
+var fieldSelected int8 = -1
+
 func main() {
 	const (
-		origApkg      = "Japanese_N5_MLT.apkg"
-		tempDB        = "collection_temp.anki2"
-		exportedEN    = "explicaciones_en.txt"
-		translatedES  = "explicaciones_es.txt"
-		newApkgOutput = "deck_traducido.apkg"
+		origApkg         = "Japanese_N5_MLT.apkg"
+		tempDB           = "collection_temp.anki2"
+		exportedEN       = "explicaciones_en.txt"
+		translatedES     = "explicaciones_es.txt"
+		newApkgOutput    = "deck_traducido.apkg"
+		fieldToTranslate = "Back lower English"
 	)
 
 	// Paso 1: descomprimir el archivo APKG y extraer collection.anki2
@@ -38,6 +41,34 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+
+	var raw string
+	err = db.QueryRow("SELECT models FROM col").Scan(&raw)
+	if err != nil {
+		panic(err)
+	}
+
+	var models map[string]interface{}
+	err = json.Unmarshal([]byte(raw), &models)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, modelData := range models {
+		model := modelData.(map[string]interface{})
+		fields := model["flds"].([]interface{})
+		for i, f := range fields {
+			name := f.(map[string]interface{})["name"].(string)
+			if name == fieldToTranslate {
+				fieldSelected = int8(i)
+			}
+		}
+	}
+
+	if fieldSelected == -1 {
+		fmt.Println("❌ No se encontró el campo a traducir:", fieldToTranslate)
+		os.Exit(1)
+	}
 
 	// Paso 3A: si no existe traducción, extraer los reversos
 	if _, err := os.Stat(translatedES); os.IsNotExist(err) {
@@ -99,13 +130,13 @@ func extractReverses(db *sql.DB, outFile string) {
 		}
 		fields := strings.Split(flds, "\x1f")
 		if len(fields) > 1 {
-			lines = append(lines, fields[1]) // reverso (campo #1)
+			lines = append(lines, fields[fieldSelected])
 		} else {
 			lines = append(lines, "")
 		}
 	}
 
-	err = ioutil.WriteFile(outFile, []byte(strings.Join(lines, "\n")), 0644)
+	err = os.WriteFile(outFile, []byte(strings.Join(lines, "\n")), 0644)
 	if err != nil {
 		fmt.Println("❌ Error al guardar archivo:", err)
 		os.Exit(1)
@@ -129,7 +160,7 @@ func applyTranslations(db *sql.DB, transFile string) error {
 		rows.Scan(&id, &flds)
 		fields := strings.Split(flds, "\x1f")
 		if len(fields) > 1 && idx < len(lines) {
-			fields[1] = lines[idx] // campo reverso
+			fields[fieldSelected] = lines[idx]
 		}
 		newFlds := strings.Join(fields, "\x1f")
 		tx.Exec("UPDATE notes SET flds = ? WHERE id = ?", newFlds, id)
