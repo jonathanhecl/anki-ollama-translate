@@ -2,74 +2,175 @@ package main
 
 import (
 	"archive/zip"
+	"bufio"
+	"database/sql"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
-	// "github.com/flimzy/anki"
-)
+	"strings"
 
-const (
-	version = "1.0.0"
+	_ "modernc.org/sqlite"
 )
 
 func main() {
-	fmt.Println("ANKI Ollama Translate v" + version)
+	const (
+		origApkg      = "Japanese_N5_MLT.apkg"
+		tempDB        = "collection_temp.anki2"
+		exportedEN    = "explicaciones_en.txt"
+		translatedES  = "explicaciones_es.txt"
+		newApkgOutput = "deck_traducido.apkg"
+	)
 
-	if err := unzipFile("test.apkg", "test"); err != nil {
-		fmt.Println(err)
+	// Paso 1: descomprimir el archivo APKG y extraer collection.anki2
+	if err := unzipCollection(origApkg, tempDB); err != nil {
+		panic(err)
+	}
+
+	// Paso 2: abrir la base de datos
+	db, err := sql.Open("sqlite", tempDB)
+	if err != nil {
+		fmt.Println("❌ Error abriendo la base SQLite:", err)
+		os.Exit(1)
+	}
+	if err = db.Ping(); err != nil {
+		fmt.Println("❌ No se puede acceder a la base SQLite:", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	// Paso 3A: si no existe traducción, extraer los reversos
+	if _, err := os.Stat(translatedES); os.IsNotExist(err) {
+		extractReverses(db, exportedEN)
+		fmt.Println("✔ Archivo creado:", exportedEN)
+		fmt.Println("→ Ahora traducilo línea por línea y guardalo como:", translatedES)
 		return
 	}
 
-	// akpg, err := anki.ReadFile("test.apkg")
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return
-	// }
-	// defer akpg.Close()
+	// Paso 3B: si existe traducción, modificar los reversos
+	if err := applyTranslations(db, translatedES); err != nil {
+		panic(err)
+	}
 
-	// collection, err := akpg.Collection()
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	return
-	// }
-	// fmt.Println(collection)
+	// Paso 4: reempacar como nuevo APKG
+	if err := repackApkg(tempDB, newApkgOutput); err != nil {
+		panic(err)
+	}
+	fmt.Println("✔ Nuevo APKG generado:", newApkgOutput)
 }
 
-func unzipFile(src, dest string) error {
-	zipReader, err := zip.OpenReader(src)
+func unzipCollection(apkgPath, outDBPath string) error {
+	r, err := zip.OpenReader(apkgPath)
 	if err != nil {
 		return err
 	}
-	defer zipReader.Close()
+	defer r.Close()
 
-	for _, file := range zipReader.File {
-		if file.FileInfo().IsDir() {
-			continue
-		}
-		fileReader, err := file.Open()
-		if err != nil {
-			return err
-		}
-		defer fileReader.Close()
-
-		if _, err := os.Stat(dest); err != nil {
-			if os.IsNotExist(err) {
-				if err := os.MkdirAll(dest, 0755); err != nil {
-					return err
-				}
+	for _, f := range r.File {
+		if f.Name == "collection.anki2" || f.Name == "collection.anki21" {
+			rc, _ := f.Open()
+			defer rc.Close()
+			out, err := os.Create(outDBPath)
+			if err != nil {
+				return err
 			}
-		}
-
-		fileWriter, err := os.Create(dest + "/" + file.Name)
-		if err != nil {
-			return err
-		}
-		defer fileWriter.Close()
-
-		_, err = io.Copy(fileWriter, fileReader)
-		if err != nil {
+			defer out.Close()
+			_, err = io.Copy(out, rc)
 			return err
 		}
 	}
+	return fmt.Errorf("no se encontró collection.anki2 en el APKG")
+}
+
+func extractReverses(db *sql.DB, outFile string) {
+	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
+	if err != nil {
+		fmt.Println("❌ Error al hacer SELECT flds FROM notes:", err)
+		os.Exit(1)
+	}
+	defer rows.Close()
+
+	var lines []string
+	for rows.Next() {
+		var flds string
+		if err := rows.Scan(&flds); err != nil {
+			fmt.Println("❌ Error al escanear una fila:", err)
+			continue
+		}
+		fields := strings.Split(flds, "\x1f")
+		if len(fields) > 1 {
+			lines = append(lines, fields[1]) // reverso (campo #1)
+		} else {
+			lines = append(lines, "")
+		}
+	}
+
+	err = ioutil.WriteFile(outFile, []byte(strings.Join(lines, "\n")), 0644)
+	if err != nil {
+		fmt.Println("❌ Error al guardar archivo:", err)
+		os.Exit(1)
+	}
+}
+
+func applyTranslations(db *sql.DB, transFile string) error {
+	lines, err := readLines(transFile)
+	if err != nil {
+		return err
+	}
+
+	rows, _ := db.Query("SELECT id, flds FROM notes ORDER BY id")
+	defer rows.Close()
+
+	tx, _ := db.Begin()
+	idx := 0
+	for rows.Next() {
+		var id int64
+		var flds string
+		rows.Scan(&id, &flds)
+		fields := strings.Split(flds, "\x1f")
+		if len(fields) > 1 && idx < len(lines) {
+			fields[1] = lines[idx] // campo reverso
+		}
+		newFlds := strings.Join(fields, "\x1f")
+		tx.Exec("UPDATE notes SET flds = ? WHERE id = ?", newFlds, id)
+		idx++
+	}
+	tx.Commit()
+	fmt.Printf("✔ Aplicadas %d traducciones.\n", idx)
 	return nil
+}
+
+func readLines(filePath string) ([]string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
+}
+
+func repackApkg(dbPath, outZip string) error {
+	newFile, err := os.Create(outZip)
+	if err != nil {
+		return err
+	}
+	defer newFile.Close()
+
+	w := zip.NewWriter(newFile)
+
+	// Añadir base de datos modificada
+	dbBytes, _ := os.ReadFile(dbPath)
+	f, _ := w.Create("collection.anki2")
+	f.Write(dbBytes)
+
+	// Añadir media (mínimo válido: archivo vacío)
+	f2, _ := w.Create("media")
+	f2.Write([]byte("{}"))
+
+	return w.Close()
 }
