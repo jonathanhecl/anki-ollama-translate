@@ -51,7 +51,7 @@ func main() {
 		} else if strings.EqualFold(arg, "-check") {
 			check = true
 		} else if strings.HasPrefix(arg, "-") {
-			fmt.Println("❌ Parámetro inválido:", arg)
+			fmt.Println("❌ Invalid parameter:", arg)
 			printUsage()
 		} else {
 			origApkg = normalizeFileName(arg, ".apkg")
@@ -59,11 +59,11 @@ func main() {
 	}
 
 	if !fileExists(origApkg) {
-		fmt.Println("❌ No se encontró el archivo APKG:", origApkg)
+		fmt.Println("❌ APKG not found:", origApkg)
 		os.Exit(1)
 	}
 
-	fmt.Println("✅ Archivo APKG:", origApkg)
+	fmt.Println("✅ APKG found:", origApkg)
 
 	tempDB = normalizeFileName(origApkg, "_temp.anki2")
 	if err := unzipCollection(origApkg, tempDB); err != nil {
@@ -72,20 +72,20 @@ func main() {
 
 	db, err := sql.Open("sqlite", tempDB)
 	if err != nil {
-		fmt.Println("❌ Error abriendo la base SQLite:", err)
+		fmt.Println("❌ Error opening SQLite database:", err)
 		os.Exit(1)
 	}
 	if err = db.Ping(); err != nil {
-		fmt.Println("❌ No se puede acceder a la base SQLite:", err)
+		fmt.Println("❌ Error pinging SQLite database:", err)
 		os.Exit(1)
 	}
 	defer func() {
 		if err := db.Close(); err != nil {
-			fmt.Println("❌ Error cerrando la base SQLite:", err)
+			fmt.Println("❌ Error closing SQLite database:", err)
 		}
 
 		if err := os.Remove(tempDB); err != nil {
-			fmt.Println("❌ Error eliminando la base SQLite:", err)
+			fmt.Println("❌ Error removing temporary SQLite database:", err)
 		}
 	}()
 
@@ -101,9 +101,9 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Println("✅ Base SQLite abierta.")
-	fmt.Println("✅ Modelos extraídos.")
-	fmt.Println("✅ ", check)
+	fmt.Println("✅ SQLite database opened.")
+	fmt.Println("✅ Models extracted.")
+	fmt.Println("✅ Check mode: ", check)
 
 	// listFields := []string{}
 
