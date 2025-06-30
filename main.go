@@ -1,12 +1,10 @@
 package main
 
 import (
-	"archive/zip"
 	"bufio"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 
@@ -89,21 +87,14 @@ func main() {
 		}
 	}()
 
-	var raw string
-	err = db.QueryRow("SELECT models FROM col").Scan(&raw)
-	if err != nil {
-		panic(err)
-	}
-
-	var models map[string]interface{}
-	err = json.Unmarshal([]byte(raw), &models)
-	if err != nil {
-		panic(err)
-	}
-
 	fmt.Println("✅ SQLite database opened.")
 	fmt.Println("✅ Models extracted.")
 	fmt.Println("✅ Check mode: ", check)
+
+	if check {
+		checkFields(db)
+		os.Exit(0)
+	}
 
 	// listFields := []string{}
 
@@ -150,27 +141,55 @@ func main() {
 	// fmt.Println("✔ Nuevo APKG generado:", newApkgOutput)
 }
 
-func unzipCollection(apkgPath, outDBPath string) error {
-	r, err := zip.OpenReader(apkgPath)
+func checkFields(db *sql.DB) {
+	var raw string
+	err := db.QueryRow("SELECT models FROM col").Scan(&raw)
 	if err != nil {
-		return err
+		panic(err)
 	}
-	defer r.Close()
 
-	for _, f := range r.File {
-		if f.Name == "collection.anki2" || f.Name == "collection.anki21" {
-			rc, _ := f.Open()
-			defer rc.Close()
-			out, err := os.Create(outDBPath)
-			if err != nil {
-				return err
+	var models map[string]interface{}
+	err = json.Unmarshal([]byte(raw), &models)
+	if err != nil {
+		panic(err)
+	}
+
+	fieldName := map[int]string{}
+
+	for _, modelData := range models {
+		model := modelData.(map[string]interface{})
+		fields := model["flds"].([]interface{})
+		for i, f := range fields {
+			name := f.(map[string]interface{})["name"].(string)
+			if len(fieldName[i]) > 0 {
+				continue
 			}
-			defer out.Close()
-			_, err = io.Copy(out, rc)
-			return err
+			fieldName[i] = name
 		}
 	}
-	return fmt.Errorf("no se encontró collection.anki2 en el APKG")
+
+	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
+	if err != nil {
+		fmt.Println("❌ Error on SELECT flds FROM notes:", err)
+		os.Exit(1)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var flds string
+		if err := rows.Scan(&flds); err != nil {
+			fmt.Println("❌ Error scanning row:", err)
+			continue
+		}
+		fields := strings.Split(flds, "\x1f")
+		for i, f := range fields {
+			if len(fieldName[i]) > 0 {
+				fmt.Println(fieldName[i], "[", i, "]", f)
+			}
+		}
+	}
+
+	fmt.Println("✅ Campos extraídos.")
 }
 
 func extractReverses(db *sql.DB, outFile string) {
@@ -245,25 +264,4 @@ func readLines(filePath string) ([]string, error) {
 		lines = append(lines, scanner.Text())
 	}
 	return lines, scanner.Err()
-}
-
-func repackApkg(dbPath, outZip string) error {
-	newFile, err := os.Create(outZip)
-	if err != nil {
-		return err
-	}
-	defer newFile.Close()
-
-	w := zip.NewWriter(newFile)
-
-	// Añadir base de datos modificada
-	dbBytes, _ := os.ReadFile(dbPath)
-	f, _ := w.Create("collection.anki2")
-	f.Write(dbBytes)
-
-	// Añadir media (mínimo válido: archivo vacío)
-	f2, _ := w.Create("media")
-	f2.Write([]byte("{}"))
-
-	return w.Close()
 }
