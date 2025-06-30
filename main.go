@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bufio"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -13,90 +12,132 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var fieldSelected int8 = -1
+var (
+	origApkg      string
+	tempDB        string
+	fieldSelected int8 = -1
+
+	//
+	version string = "1.0.0"
+)
+
+// const (
+// 	origApkg         = "Jlab's beginner course.apkg"
+// 	tempDB           = "Jlab's beginner course.anki2"
+// 	exportedEN       = "output_en.txt"
+// 	translatedES     = "output_es.txt"
+// 	newApkgOutput    = "deck_traducido.apkg"
+// 	fieldToTranslate = "RemarksBack"
+// )
+
+func printUsage() {
+	fmt.Println("Usage: anki-ollama-translate <apkg>")
+	os.Exit(1)
+}
 
 func main() {
-	const (
-		origApkg         = "test.apkg"
-		tempDB           = "collection_temp.anki2"
-		exportedEN       = "output_en.txt"
-		translatedES     = "output_es.txt"
-		newApkgOutput    = "deck_traducido.apkg"
-		fieldToTranslate = "Front"
-	)
 
-	// Paso 1: descomprimir el archivo APKG y extraer collection.anki2
-	if err := unzipCollection(origApkg, tempDB); err != nil {
-		panic(err)
+	fmt.Println("anki-ollama-translate v" + version)
+	if len(os.Args) < 2 {
+		printUsage()
 	}
 
-	// Paso 2: abrir la base de datos
-	db, err := sql.Open("sqlite", tempDB)
-	if err != nil {
-		fmt.Println("❌ Error abriendo la base SQLite:", err)
-		os.Exit(1)
-	}
-	if err = db.Ping(); err != nil {
-		fmt.Println("❌ No se puede acceder a la base SQLite:", err)
-		os.Exit(1)
-	}
-	defer db.Close()
+	var check bool = false
 
-	var raw string
-	err = db.QueryRow("SELECT models FROM col").Scan(&raw)
-	if err != nil {
-		panic(err)
-	}
-
-	var models map[string]interface{}
-	err = json.Unmarshal([]byte(raw), &models)
-	if err != nil {
-		panic(err)
-	}
-
-	listFields := []string{}
-
-	for _, modelData := range models {
-		model := modelData.(map[string]interface{})
-		fmt.Println(model["name"])
-		fields := model["flds"].([]interface{})
-		for i, f := range fields {
-			name := f.(map[string]interface{})["name"].(string)
-			listFields = append(listFields, fmt.Sprintf("[%s] %d = %s", model["name"].(string), i, name))
-			if name == fieldToTranslate {
-				fieldSelected = int8(i)
-				break
-			}
+	for _, arg := range os.Args[1:] {
+		if strings.EqualFold(arg, "-h") || strings.EqualFold(arg, "--help") {
+			printUsage()
+		} else if strings.EqualFold(arg, "-check") {
+			check = true
+		} else if strings.HasPrefix(arg, "-") {
+			fmt.Println("❌ Parámetro inválido:", arg)
+			printUsage()
+		} else {
+			origApkg = normalizeFileName(arg, ".apkg")
 		}
 	}
 
-	if fieldSelected == -1 {
-		fmt.Println("❌ No se encontró el campo a traducir:", fieldToTranslate)
-		fmt.Println("Los campos disponibles son:")
-		for _, v := range listFields {
-			fmt.Println(v)
-		}
+	if !fileExists(origApkg) {
+		fmt.Println("❌ No se encontró el archivo APKG:", origApkg)
 		os.Exit(1)
 	}
 
-	// Paso 3A: si no existe traducción, extraer los reversos
-	if _, err := os.Stat(translatedES); os.IsNotExist(err) {
-		extractReverses(db, exportedEN)
-		fmt.Println("✔ Archivo creado:", exportedEN)
-		fmt.Println("→ Ahora traducilo línea por línea y guardalo como:", translatedES)
-		return
-	}
+	fmt.Println("✅ Archivo APKG:", origApkg)
 
-	// Paso 3B: si existe traducción, modificar los reversos
-	if err := applyTranslations(db, translatedES); err != nil {
-		panic(err)
-	}
+	return
 
-	// Paso 4: reempacar como nuevo APKG
-	if err := repackApkg(tempDB, newApkgOutput); err != nil {
-		panic(err)
-	}
-	fmt.Println("✔ Nuevo APKG generado:", newApkgOutput)
+	// // Paso 1: descomprimir el archivo APKG y extraer collection.anki2
+	// if err := unzipCollection(origApkg, tempDB); err != nil {
+	// 	panic(err)
+	// }
+
+	// // Paso 2: abrir la base de datos
+	// db, err := sql.Open("sqlite", tempDB)
+	// if err != nil {
+	// 	fmt.Println("❌ Error abriendo la base SQLite:", err)
+	// 	os.Exit(1)
+	// }
+	// if err = db.Ping(); err != nil {
+	// 	fmt.Println("❌ No se puede acceder a la base SQLite:", err)
+	// 	os.Exit(1)
+	// }
+	// defer db.Close()
+
+	// var raw string
+	// err = db.QueryRow("SELECT models FROM col").Scan(&raw)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// var models map[string]interface{}
+	// err = json.Unmarshal([]byte(raw), &models)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// listFields := []string{}
+
+	// for _, modelData := range models {
+	// 	model := modelData.(map[string]interface{})
+	// 	fmt.Println(model["name"])
+	// 	fields := model["flds"].([]interface{})
+	// 	for i, f := range fields {
+	// 		name := f.(map[string]interface{})["name"].(string)
+	// 		listFields = append(listFields, fmt.Sprintf("[%s] %d = %s", model["name"].(string), i, name))
+	// 		if name == fieldToTranslate {
+	// 			fieldSelected = int8(i)
+	// 			break
+	// 		}
+	// 	}
+	// }
+
+	// if fieldSelected == -1 {
+	// 	fmt.Println("❌ No se encontró el campo a traducir:", fieldToTranslate)
+	// 	fmt.Println("Los campos disponibles son:")
+	// 	for _, v := range listFields {
+	// 		fmt.Println(v)
+	// 	}
+	// 	os.Exit(1)
+	// }
+
+	// // Paso 3A: si no existe traducción, extraer los reversos
+	// if _, err := os.Stat(translatedES); os.IsNotExist(err) {
+	// 	extractReverses(db, exportedEN)
+	// 	fmt.Println("✔ Archivo creado:", exportedEN)
+	// 	fmt.Println("→ Ahora traducilo línea por línea y guardalo como:", translatedES)
+	// 	return
+	// }
+
+	// // Paso 3B: si existe traducción, modificar los reversos
+	// if err := applyTranslations(db, translatedES); err != nil {
+	// 	panic(err)
+	// }
+
+	// // Paso 4: reempacar como nuevo APKG
+	// if err := repackApkg(tempDB, newApkgOutput); err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println("✔ Nuevo APKG generado:", newApkgOutput)
 }
 
 func unzipCollection(apkgPath, outDBPath string) error {
@@ -138,10 +179,10 @@ func extractReverses(db *sql.DB, outFile string) {
 			continue
 		}
 		fields := strings.Split(flds, "\x1f")
-		fmt.Println(fields)
-		break
 		if len(fields) > 1 {
-			lines = append(lines, fields[fieldSelected])
+			if int(fieldSelected) < len(fields) {
+				lines = append(lines, fields[fieldSelected])
+			}
 		} else {
 			lines = append(lines, "")
 		}
