@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -64,36 +65,45 @@ func main() {
 
 	fmt.Println("✅ Archivo APKG:", origApkg)
 
-	return
+	tempDB = normalizeFileName(origApkg, "_temp.anki2")
+	if err := unzipCollection(origApkg, tempDB); err != nil {
+		panic(err)
+	}
 
-	// // Paso 1: descomprimir el archivo APKG y extraer collection.anki2
-	// if err := unzipCollection(origApkg, tempDB); err != nil {
-	// 	panic(err)
-	// }
+	db, err := sql.Open("sqlite", tempDB)
+	if err != nil {
+		fmt.Println("❌ Error abriendo la base SQLite:", err)
+		os.Exit(1)
+	}
+	if err = db.Ping(); err != nil {
+		fmt.Println("❌ No se puede acceder a la base SQLite:", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			fmt.Println("❌ Error cerrando la base SQLite:", err)
+		}
 
-	// // Paso 2: abrir la base de datos
-	// db, err := sql.Open("sqlite", tempDB)
-	// if err != nil {
-	// 	fmt.Println("❌ Error abriendo la base SQLite:", err)
-	// 	os.Exit(1)
-	// }
-	// if err = db.Ping(); err != nil {
-	// 	fmt.Println("❌ No se puede acceder a la base SQLite:", err)
-	// 	os.Exit(1)
-	// }
-	// defer db.Close()
+		if err := os.Remove(tempDB); err != nil {
+			fmt.Println("❌ Error eliminando la base SQLite:", err)
+		}
+	}()
 
-	// var raw string
-	// err = db.QueryRow("SELECT models FROM col").Scan(&raw)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	var raw string
+	err = db.QueryRow("SELECT models FROM col").Scan(&raw)
+	if err != nil {
+		panic(err)
+	}
 
-	// var models map[string]interface{}
-	// err = json.Unmarshal([]byte(raw), &models)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	var models map[string]interface{}
+	err = json.Unmarshal([]byte(raw), &models)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("✅ Base SQLite abierta.")
+	fmt.Println("✅ Modelos extraídos.")
+	fmt.Println("✅ ", check)
 
 	// listFields := []string{}
 
