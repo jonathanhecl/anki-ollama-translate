@@ -30,7 +30,7 @@ var (
 // )
 
 func printUsage() {
-	fmt.Println("Usage: anki-ollama-translate <apkg>")
+	fmt.Println("Usage: anki-ollama-translate <apkg> [-check]")
 	os.Exit(1)
 }
 
