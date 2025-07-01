@@ -30,7 +30,10 @@ var (
 // )
 
 func printUsage() {
-	fmt.Println("Usage: anki-ollama-translate <apkg> [-check]")
+	fmt.Println("Usage: anki-ollama-translate <apkg> [OPTIONS]")
+	fmt.Println("Options:")
+	fmt.Println("  -check		Check all fields for translation.")
+	fmt.Println("  -h, --help	Show this help message.")
 	os.Exit(1)
 }
 
