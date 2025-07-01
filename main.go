@@ -87,8 +87,6 @@ func main() {
 		}
 	}()
 
-	fmt.Println("✅ SQLite database opened.")
-	fmt.Println("✅ Models extracted.")
 	fmt.Println("✅ Check mode: ", check)
 
 	if check {
@@ -189,7 +187,7 @@ func checkFields(db *sql.DB) {
 		}
 	}
 
-	fmt.Println("✅ Campos extraídos.")
+	fmt.Println("✅ All fields checked.")
 }
 
 func extractReverses(db *sql.DB, outFile string) {
