@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -12,9 +11,10 @@ import (
 )
 
 var (
-	origApkg      string
-	tempDB        string
-	fieldSelected int8 = -1
+	origApkg        string
+	tempDB          string
+	fieldSelected   string = ""
+	fieldSelectedID int8   = -1
 
 	//
 	version string = "1.0.0"
@@ -32,8 +32,9 @@ var (
 func printUsage() {
 	fmt.Println("Usage: anki-ollama-translate <apkg> [OPTIONS]")
 	fmt.Println("Options:")
-	fmt.Println("  -check		Check all fields before translation.")
-	fmt.Println("  -h, --help	Show this help message.")
+	fmt.Println("  -check \tCheck all fields before translation.")
+	fmt.Println("  -field=\"<field_name>\" \tSelect field to translate.")
+	fmt.Println("  -h, --help \tShow this help message.")
 	os.Exit(1)
 }
 
@@ -51,6 +52,8 @@ func main() {
 			printUsage()
 		} else if strings.EqualFold(arg, "-check") {
 			check = true
+		} else if strings.HasPrefix(arg, "-field=") {
+			fieldSelected = arg[len("-field="):]
 		} else if strings.HasPrefix(arg, "-") {
 			fmt.Println("❌ Invalid parameter:", arg)
 			printUsage()
@@ -61,25 +64,34 @@ func main() {
 
 	if !fileExists(origApkg) {
 		fmt.Println("❌ APKG not found:", origApkg)
-		os.Exit(1)
+		return
+	}
+
+	// Requirements
+	if check && fieldSelected != "" || !check && fieldSelected == "" {
+		fmt.Println("❌ Invalid parameters: -check or -field are mutually exclusive.")
+		printUsage()
 	}
 
 	fmt.Println("✅ APKG found:", origApkg)
 
 	tempDB = normalizeFileName(origApkg, "_temp.anki2")
 	if err := unzipCollection(origApkg, tempDB); err != nil {
-		panic(err)
+		fmt.Println("❌ Error unzipping APKG:", err)
+		return
 	}
 
 	db, err := sql.Open("sqlite", tempDB)
 	if err != nil {
 		fmt.Println("❌ Error opening SQLite database:", err)
-		os.Exit(1)
+		return
 	}
 	if err = db.Ping(); err != nil {
 		fmt.Println("❌ Error pinging SQLite database:", err)
-		os.Exit(1)
+		return
 	}
+
+	// Close database and remove temporary file on exit
 	defer func() {
 		if err := db.Close(); err != nil {
 			fmt.Println("❌ Error closing SQLite database:", err)
@@ -94,8 +106,21 @@ func main() {
 
 	if check {
 		checkFields(db)
-		os.Exit(0)
+		return
 	}
+
+	if fieldSelected == "" {
+		fmt.Println("❌ Field not selected. Use -field=\"<field_name>\" to select a field. Use -check to check all fields if you are not sure.")
+		return
+	}
+
+	fieldSelectedID = findFieldID(db, fieldSelected)
+	if fieldSelectedID == -1 {
+		fmt.Println("❌ Field not found:", fieldSelected)
+		return
+	}
+
+	fmt.Println("✅ Field found:", fieldSelected, "[", fieldSelectedID, "]")
 
 	// listFields := []string{}
 
@@ -140,6 +165,33 @@ func main() {
 	// 	panic(err)
 	// }
 	// fmt.Println("✔ Nuevo APKG generado:", newApkgOutput)
+}
+
+func findFieldID(db *sql.DB, fieldName string) int8 {
+	var raw string
+	err := db.QueryRow("SELECT models FROM col").Scan(&raw)
+	if err != nil {
+		panic(err)
+	}
+
+	var models map[string]interface{}
+	err = json.Unmarshal([]byte(raw), &models)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, modelData := range models {
+		model := modelData.(map[string]interface{})
+		fields := model["flds"].([]interface{})
+		for i, f := range fields {
+			name := f.(map[string]interface{})["name"].(string)
+			if strings.EqualFold(name, fieldName) {
+				return int8(i)
+			}
+		}
+	}
+
+	return -1
 }
 
 func checkFields(db *sql.DB) {
@@ -193,76 +245,76 @@ func checkFields(db *sql.DB) {
 	fmt.Println("✅ All fields checked.")
 }
 
-func extractReverses(db *sql.DB, outFile string) {
-	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
-	if err != nil {
-		fmt.Println("❌ Error al hacer SELECT flds FROM notes:", err)
-		os.Exit(1)
-	}
-	defer rows.Close()
+// func extractReverses(db *sql.DB, outFile string) {
+// 	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
+// 	if err != nil {
+// 		fmt.Println("❌ Error al hacer SELECT flds FROM notes:", err)
+// 		os.Exit(1)
+// 	}
+// 	defer rows.Close()
 
-	var lines []string
-	for rows.Next() {
-		var flds string
-		if err := rows.Scan(&flds); err != nil {
-			fmt.Println("❌ Error al escanear una fila:", err)
-			continue
-		}
-		fields := strings.Split(flds, "\x1f")
-		if len(fields) > 1 {
-			if int(fieldSelected) < len(fields) {
-				lines = append(lines, fields[fieldSelected])
-			}
-		} else {
-			lines = append(lines, "")
-		}
-	}
+// 	var lines []string
+// 	for rows.Next() {
+// 		var flds string
+// 		if err := rows.Scan(&flds); err != nil {
+// 			fmt.Println("❌ Error al escanear una fila:", err)
+// 			continue
+// 		}
+// 		fields := strings.Split(flds, "\x1f")
+// 		if len(fields) > 1 {
+// 			if int(fieldSelected) < len(fields) {
+// 				lines = append(lines, fields[fieldSelected])
+// 			}
+// 		} else {
+// 			lines = append(lines, "")
+// 		}
+// 	}
 
-	err = os.WriteFile(outFile, []byte(strings.Join(lines, "\n")), 0644)
-	if err != nil {
-		fmt.Println("❌ Error al guardar archivo:", err)
-		os.Exit(1)
-	}
-}
+// 	err = os.WriteFile(outFile, []byte(strings.Join(lines, "\n")), 0644)
+// 	if err != nil {
+// 		fmt.Println("❌ Error al guardar archivo:", err)
+// 		os.Exit(1)
+// 	}
+// }
 
-func applyTranslations(db *sql.DB, transFile string) error {
-	lines, err := readLines(transFile)
-	if err != nil {
-		return err
-	}
+// func applyTranslations(db *sql.DB, transFile string) error {
+// 	lines, err := readLines(transFile)
+// 	if err != nil {
+// 		return err
+// 	}
 
-	rows, _ := db.Query("SELECT id, flds FROM notes ORDER BY id")
-	defer rows.Close()
+// 	rows, _ := db.Query("SELECT id, flds FROM notes ORDER BY id")
+// 	defer rows.Close()
 
-	tx, _ := db.Begin()
-	idx := 0
-	for rows.Next() {
-		var id int64
-		var flds string
-		rows.Scan(&id, &flds)
-		fields := strings.Split(flds, "\x1f")
-		if len(fields) > 1 && idx < len(lines) {
-			fields[fieldSelected] = lines[idx]
-		}
-		newFlds := strings.Join(fields, "\x1f")
-		tx.Exec("UPDATE notes SET flds = ? WHERE id = ?", newFlds, id)
-		idx++
-	}
-	tx.Commit()
-	fmt.Printf("✔ Aplicadas %d traducciones.\n", idx)
-	return nil
-}
+// 	tx, _ := db.Begin()
+// 	idx := 0
+// 	for rows.Next() {
+// 		var id int64
+// 		var flds string
+// 		rows.Scan(&id, &flds)
+// 		fields := strings.Split(flds, "\x1f")
+// 		if len(fields) > 1 && idx < len(lines) {
+// 			fields[fieldSelected] = lines[idx]
+// 		}
+// 		newFlds := strings.Join(fields, "\x1f")
+// 		tx.Exec("UPDATE notes SET flds = ? WHERE id = ?", newFlds, id)
+// 		idx++
+// 	}
+// 	tx.Commit()
+// 	fmt.Printf("✔ Aplicadas %d traducciones.\n", idx)
+// 	return nil
+// }
 
-func readLines(filePath string) ([]string, error) {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	var lines []string
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
-	}
-	return lines, scanner.Err()
-}
+// func readLines(filePath string) ([]string, error) {
+// 	f, err := os.Open(filePath)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	defer f.Close()
+// 	var lines []string
+// 	scanner := bufio.NewScanner(f)
+// 	for scanner.Scan() {
+// 		lines = append(lines, scanner.Text())
+// 	}
+// 	return lines, scanner.Err()
+// }
