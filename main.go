@@ -17,12 +17,9 @@ var (
 	tempDB          string
 	fieldSelected   string = ""
 	fieldSelectedID int8   = -1
-	//
-	ollamaModel string = "llama3.2"
-	ollamaURL   string = "http://localhost:11434"
-
-	//
-	version string = "1.0.0"
+	modelSelected   string = "llama3.2"
+	version         string = "1.0.0"
+	toLanguage      string = "español"
 )
 
 // const (
@@ -39,6 +36,8 @@ func printUsage() {
 	fmt.Println("Options:")
 	fmt.Println("  -check \tCheck all fields before translation.")
 	fmt.Println("  -field=\"<field_name>\" \tSelect field to translate.")
+	fmt.Println("  -model=\"<model_name>\" \tSelect Ollama model to translate.")
+	fmt.Println("  -to=\"<language>\" \tSelect language to translate to.")
 	fmt.Println("  -h, --help \tShow this help message.")
 	os.Exit(1)
 }
@@ -59,6 +58,10 @@ func main() {
 			check = true
 		} else if strings.HasPrefix(arg, "-field=") {
 			fieldSelected = arg[len("-field="):]
+		} else if strings.HasPrefix(arg, "-model=") {
+			modelSelected = arg[len("-model="):]
+		} else if strings.HasPrefix(arg, "-to=") {
+			toLanguage = arg[len("-to="):]
 		} else if strings.HasPrefix(arg, "-") {
 			fmt.Println("❌ Invalid parameter:", arg)
 			printUsage()
@@ -74,7 +77,7 @@ func main() {
 
 	// Ollama
 	ctx := context.Background()
-	g := gollama.New(ollamaModel)
+	g := gollama.New(modelSelected)
 	if err := g.PullIfMissing(ctx); err != nil {
 		fmt.Println("❌ Error pulling Ollama model:", err)
 		return
@@ -135,38 +138,11 @@ func main() {
 
 	fmt.Println("✅ Field found:", fieldSelected, "[", fieldSelectedID, "]")
 
-	// listFields := []string{}
+	lines := extractLines(db, fieldSelectedID)
 
-	// for _, modelData := range models {
-	// 	model := modelData.(map[string]interface{})
-	// 	fmt.Println(model["name"])
-	// 	fields := model["flds"].([]interface{})
-	// 	for i, f := range fields {
-	// 		name := f.(map[string]interface{})["name"].(string)
-	// 		listFields = append(listFields, fmt.Sprintf("[%s] %d = %s", model["name"].(string), i, name))
-	// 		if name == fieldToTranslate {
-	// 			fieldSelected = int8(i)
-	// 			break
-	// 		}
-	// 	}
-	// }
-
-	// if fieldSelected == -1 {
-	// 	fmt.Println("❌ No se encontró el campo a traducir:", fieldToTranslate)
-	// 	fmt.Println("Los campos disponibles son:")
-	// 	for _, v := range listFields {
-	// 		fmt.Println(v)
-	// 	}
-	// 	os.Exit(1)
-	// }
-
-	// // Paso 3A: si no existe traducción, extraer los reversos
-	// if _, err := os.Stat(translatedES); os.IsNotExist(err) {
-	// 	extractReverses(db, exportedEN)
-	// 	fmt.Println("✔ Archivo creado:", exportedEN)
-	// 	fmt.Println("→ Ahora traducilo línea por línea y guardalo como:", translatedES)
-	// 	return
-	// }
+	for idx, line := range lines {
+		fmt.Println(idx, line)
+	}
 
 	// // Paso 3B: si existe traducción, modificar los reversos
 	// if err := applyTranslations(db, translatedES); err != nil {
@@ -256,6 +232,33 @@ func checkFields(db *sql.DB) {
 	}
 
 	fmt.Println("✅ All fields checked.")
+}
+
+func extractLines(db *sql.DB, fieldSelectedID int8) []string {
+	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
+	if err != nil {
+		fmt.Println("❌ Error on SELECT flds FROM notes:", err)
+		os.Exit(1)
+	}
+	defer rows.Close()
+
+	var lines []string
+	for rows.Next() {
+		var flds string
+		if err := rows.Scan(&flds); err != nil {
+			fmt.Println("❌ Error scanning row:", err)
+			continue
+		}
+		fields := strings.Split(flds, "\x1f")
+		if len(fields) > 1 {
+			if int(fieldSelectedID) < len(fields) {
+				lines = append(lines, fields[fieldSelectedID])
+			}
+		} else {
+			lines = append(lines, "")
+		}
+	}
+	return lines
 }
 
 // func extractReverses(db *sql.DB, outFile string) {
