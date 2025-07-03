@@ -306,7 +306,6 @@ func applyTranslations(db *sql.DB, lines []string) error {
 		rows.Scan(&id, &flds)
 		fields := strings.Split(flds, "\x1f")
 		if len(fields) > 1 && idx < len(lines) {
-			fmt.Println("Applying translation:", lines[idx])
 			if len(fields) > int(fieldSelectedID) {
 				fields[fieldSelectedID] = lines[idx]
 				idx++

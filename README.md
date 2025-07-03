@@ -1,12 +1,19 @@
 # Anki Ollama Translate
 
-A simple tool to translate Anki cards using Ollama.
+A simple tool to translate Anki cards using Ollama (Artificial Intelligence Models).
 
-## Important
+## ⚠️ Important
 
-- Only works with old format apkg files. Export your collection to apkg from Anki.
+- This tool only works with Anki package files (.apkg) exported in the legacy format.
+- **How to export your deck correctly in Anki**:
+  1. Go to `Decks` > `Export...`
+  2. Select your deck from the dropdown
+  3. Set format to "Anki Deck Package (*.apkg)"
+  4. **IMPORTANT**: Check the option "Compatibility with older Anki versions (slower/larger files)"
+  5. Make sure "Include media" is checked if your cards have images/audio
+  6. Click "Export" and save the file
 
-## Usage
+## 🛠️ Usage
 
 ```sh
 anki-ollama-translate <apkg> [OPTIONS]
