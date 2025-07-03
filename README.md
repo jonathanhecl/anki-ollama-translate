@@ -22,7 +22,7 @@ anki-ollama-translate <apkg> [OPTIONS]
 ### Options
 
 - `-check`
-  - Check all fields before translation.
+  - Check all fields before translation. This is useful to see the fields names.
 - `-field="<field_name>"`
   - Select field to translate.
 - `-model="<model_name>"`
