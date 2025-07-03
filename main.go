@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/jonathanhecl/gollama"
 	_ "modernc.org/sqlite"
 )
 
@@ -15,6 +17,9 @@ var (
 	tempDB          string
 	fieldSelected   string = ""
 	fieldSelectedID int8   = -1
+	//
+	ollamaModel string = "llama3.2"
+	ollamaURL   string = "http://localhost:11434"
 
 	//
 	version string = "1.0.0"
@@ -64,6 +69,14 @@ func main() {
 
 	if !fileExists(origApkg) {
 		fmt.Println("❌ APKG not found:", origApkg)
+		return
+	}
+
+	// Ollama
+	ctx := context.Background()
+	g := gollama.New(ollamaModel)
+	if err := g.PullIfMissing(ctx); err != nil {
+		fmt.Println("❌ Error pulling Ollama model:", err)
 		return
 	}
 
