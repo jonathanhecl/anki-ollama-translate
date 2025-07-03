@@ -113,8 +113,6 @@ func main() {
 		}
 	}()
 
-	fmt.Println("✅ Check mode: ", check)
-
 	if check {
 		checkFields(db)
 		return

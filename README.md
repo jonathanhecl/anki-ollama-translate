@@ -34,4 +34,16 @@ anki-ollama-translate <apkg> [OPTIONS]
 - `-h, --help`
   - Show this help message.
 
+## Requirements
 
+- Ollama (https://ollama.com/) installed and running.
+- OPTIONAL: Llama3.2 model installed in Ollama.
+- Windows, Linux or macOS.
+
+## Download
+
+You can download the latest release from [Releases](https://github.com/jonathanhecl/anki-ollama-translate/releases).
+
+## 📝 License
+
+MIT License
