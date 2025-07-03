@@ -143,11 +143,9 @@ func main() {
 		progress.Value(i)
 
 		if i%10 == 0 {
-			fmt.Printf("\nTranslation progress: %s %s lines (100%%) - Total time: %s\n", progress.GetProgressBar(len(lines)), progress.GetProgressValues(), progress.GetTimeSpent().String())
+			fmt.Printf("\nTranslation progress: %s %s lines (100%%) - Total time: %s - Time left: %s\n", progress.GetProgressBar(len(lines)), progress.GetProgressValues(), progress.GetTimeSpent().String(), progress.GetTimeLeft().String())
 		}
 	}
-
-	fmt.Printf("\nTranslation progress: %s %s lines (100%%) - Total time: %s\n", progress.GetProgressBar(len(lines)), progress.GetProgressValues(), progress.GetTimeSpent().String())
 
 	if err := applyTranslations(db, lines); err != nil {
 		fmt.Println("❌ Error applying translations:", err)
