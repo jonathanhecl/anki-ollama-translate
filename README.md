@@ -1,6 +1,8 @@
 # Anki Ollama Translate
 
-A simple tool to translate Anki cards using Ollama (Artificial Intelligence Models).
+A simple tool to translate Anki cards using Ollama (https://ollama.com/).
+
+You can use it to translate your Anki decks to another language using AI models.
 
 ## ⚠️ Important
 
