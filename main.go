@@ -5,39 +5,33 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
 	"github.com/jonathanhecl/gollama"
+	"github.com/jonathanhecl/gotimeleft"
 	_ "modernc.org/sqlite"
 )
 
 var (
 	origApkg        string
+	newApkgOutput   string
 	tempDB          string
 	fieldSelected   string = ""
 	fieldSelectedID int8   = -1
 	modelSelected   string = "llama3.2"
 	version         string = "1.0.0"
-	toLanguage      string = "español"
+	toLanguage      string = "español neutro"
 )
-
-// const (
-// 	origApkg         = "Jlab's beginner course.apkg"
-// 	tempDB           = "Jlab's beginner course.anki2"
-// 	exportedEN       = "output_en.txt"
-// 	translatedES     = "output_es.txt"
-// 	newApkgOutput    = "deck_traducido.apkg"
-// 	fieldToTranslate = "RemarksBack"
-// )
 
 func printUsage() {
 	fmt.Println("Usage: anki-ollama-translate <apkg> [OPTIONS]")
 	fmt.Println("Options:")
 	fmt.Println("  -check \tCheck all fields before translation.")
 	fmt.Println("  -field=\"<field_name>\" \tSelect field to translate.")
-	fmt.Println("  -model=\"<model_name>\" \tSelect Ollama model to translate.")
-	fmt.Println("  -to=\"<language>\" \tSelect language to translate to.")
+	fmt.Println("  -model=\"<model_name>\" \tSelect Ollama model to translate. Default: llama3.2")
+	fmt.Println("  -to=\"<language>\" \tSelect language to translate to. Default: español neutro")
 	fmt.Println("  -h, --help \tShow this help message.")
 	os.Exit(1)
 }
@@ -75,6 +69,8 @@ func main() {
 		return
 	}
 
+	newApkgOutput = normalizeFileName(origApkg, "_"+toLanguage+".apkg")
+
 	// Ollama
 	ctx := context.Background()
 	g := gollama.New(modelSelected)
@@ -107,7 +103,6 @@ func main() {
 		return
 	}
 
-	// Close database and remove temporary file on exit
 	defer func() {
 		if err := db.Close(); err != nil {
 			fmt.Println("❌ Error closing SQLite database:", err)
@@ -140,20 +135,30 @@ func main() {
 
 	lines := extractLines(db, fieldSelectedID)
 
-	for idx, line := range lines {
-		fmt.Println(idx, line)
+	progress := gotimeleft.Init(len(lines))
+	progress.Value(0)
+
+	for i, line := range lines {
+		lines[i] = translateLine(g, line)
+		progress.Value(i)
+
+		if i%10 == 0 {
+			fmt.Printf("\nTranslation progress: %s %s lines (100%%) - Total time: %s\n", progress.GetProgressBar(len(lines)), progress.GetProgressValues(), progress.GetTimeSpent().String())
+		}
 	}
 
-	// // Paso 3B: si existe traducción, modificar los reversos
-	// if err := applyTranslations(db, translatedES); err != nil {
-	// 	panic(err)
-	// }
+	fmt.Printf("\nTranslation progress: %s %s lines (100%%) - Total time: %s\n", progress.GetProgressBar(len(lines)), progress.GetProgressValues(), progress.GetTimeSpent().String())
 
-	// // Paso 4: reempacar como nuevo APKG
-	// if err := repackApkg(tempDB, newApkgOutput); err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println("✔ Nuevo APKG generado:", newApkgOutput)
+	if err := applyTranslations(db, lines); err != nil {
+		fmt.Println("❌ Error applying translations:", err)
+		return
+	}
+
+	if err := repackApkg(tempDB, newApkgOutput); err != nil {
+		fmt.Println("❌ Error repacking APKG:", err)
+		return
+	}
+	fmt.Println("✔ New APKG generated:", newApkgOutput)
 }
 
 func findFieldID(db *sql.DB, fieldName string) int8 {
@@ -261,76 +266,53 @@ func extractLines(db *sql.DB, fieldSelectedID int8) []string {
 	return lines
 }
 
-// func extractReverses(db *sql.DB, outFile string) {
-// 	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
-// 	if err != nil {
-// 		fmt.Println("❌ Error al hacer SELECT flds FROM notes:", err)
-// 		os.Exit(1)
-// 	}
-// 	defer rows.Close()
+func translateLine(g *gollama.Gollama, line string) string {
+	translateCtx := context.Background()
+	prompt := `You are translating a Anki card.
+Preserve the original formatting. Do not add any additional formatting.
+Do not add any additional text.
+Translate the following text to ` + toLanguage + `:
+"` + line + `"`
 
-// 	var lines []string
-// 	for rows.Next() {
-// 		var flds string
-// 		if err := rows.Scan(&flds); err != nil {
-// 			fmt.Println("❌ Error al escanear una fila:", err)
-// 			continue
-// 		}
-// 		fields := strings.Split(flds, "\x1f")
-// 		if len(fields) > 1 {
-// 			if int(fieldSelected) < len(fields) {
-// 				lines = append(lines, fields[fieldSelected])
-// 			}
-// 		} else {
-// 			lines = append(lines, "")
-// 		}
-// 	}
+	type outputType struct {
+		Translation string `description:"Translation"`
+	}
 
-// 	err = os.WriteFile(outFile, []byte(strings.Join(lines, "\n")), 0644)
-// 	if err != nil {
-// 		fmt.Println("❌ Error al guardar archivo:", err)
-// 		os.Exit(1)
-// 	}
-// }
+	response, err := g.Chat(translateCtx, prompt, gollama.StructToStructuredFormat(outputType{}))
+	if err != nil {
+		log.Fatal("❌ Error getting translation from Gollama:", err)
+		return ""
+	}
 
-// func applyTranslations(db *sql.DB, transFile string) error {
-// 	lines, err := readLines(transFile)
-// 	if err != nil {
-// 		return err
-// 	}
+	var output outputType
+	if err := response.DecodeContent(&output); err != nil {
+		log.Fatal("❌ Error decoding response:", err)
+		return ""
+	}
 
-// 	rows, _ := db.Query("SELECT id, flds FROM notes ORDER BY id")
-// 	defer rows.Close()
+	return output.Translation
+}
 
-// 	tx, _ := db.Begin()
-// 	idx := 0
-// 	for rows.Next() {
-// 		var id int64
-// 		var flds string
-// 		rows.Scan(&id, &flds)
-// 		fields := strings.Split(flds, "\x1f")
-// 		if len(fields) > 1 && idx < len(lines) {
-// 			fields[fieldSelected] = lines[idx]
-// 		}
-// 		newFlds := strings.Join(fields, "\x1f")
-// 		tx.Exec("UPDATE notes SET flds = ? WHERE id = ?", newFlds, id)
-// 		idx++
-// 	}
-// 	tx.Commit()
-// 	fmt.Printf("✔ Aplicadas %d traducciones.\n", idx)
-// 	return nil
-// }
+func applyTranslations(db *sql.DB, lines []string) error {
 
-// func readLines(filePath string) ([]string, error) {
-// 	f, err := os.Open(filePath)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	defer f.Close()
-// 	var lines []string
-// 	scanner := bufio.NewScanner(f)
-// 	for scanner.Scan() {
-// 		lines = append(lines, scanner.Text())
-// 	}
-// 	return lines, scanner.Err()
-// }
+	rows, _ := db.Query("SELECT id, flds FROM notes ORDER BY id")
+	defer rows.Close()
+
+	tx, _ := db.Begin()
+	idx := 0
+	for rows.Next() {
+		var id int64
+		var flds string
+		rows.Scan(&id, &flds)
+		fields := strings.Split(flds, "\x1f")
+		if len(fields) > 1 && idx < len(lines) {
+			fields[fieldSelectedID] = lines[idx]
+		}
+		newFlds := strings.Join(fields, "\x1f")
+		tx.Exec("UPDATE notes SET flds = ? WHERE id = ?", newFlds, id)
+		idx++
+	}
+	tx.Commit()
+	fmt.Printf("✔ Applied %d translations.\n", idx)
+	return nil
+}
