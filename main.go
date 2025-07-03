@@ -145,9 +145,6 @@ func main() {
 		if i%10 == 0 {
 			fmt.Printf("\nTranslation progress: %s %s lines (100%%) - Total time: %s - Time left: %s\n", progress.GetProgressBar(50), progress.GetProgressValues(), progress.GetTimeSpent().String(), progress.GetTimeLeft().String())
 		}
-		if i == 10 {
-			break
-		}
 	}
 
 	fmt.Printf("\nTranslation completed.\n")
