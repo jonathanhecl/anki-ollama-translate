@@ -143,7 +143,10 @@ func main() {
 		progress.Value(i)
 
 		if i%10 == 0 {
-			fmt.Printf("\nTranslation progress: %s %s lines (100%%) - Total time: %s - Time left: %s\n", progress.GetProgressBar(len(lines)), progress.GetProgressValues(), progress.GetTimeSpent().String(), progress.GetTimeLeft().String())
+			fmt.Printf("\nTranslation progress: %s %s lines (100%%) - Total time: %s - Time left: %s\n", progress.GetProgressBar(50), progress.GetProgressValues(), progress.GetTimeSpent().String(), progress.GetTimeLeft().String())
+		}
+		if i == 10 {
+			break
 		}
 	}
 
@@ -306,12 +309,17 @@ func applyTranslations(db *sql.DB, lines []string) error {
 		rows.Scan(&id, &flds)
 		fields := strings.Split(flds, "\x1f")
 		if len(fields) > 1 && idx < len(lines) {
-			fields[fieldSelectedID] = lines[idx]
+			fmt.Println("Applying translation:", lines[idx])
+			if len(fields) > int(fieldSelectedID) {
+				fields[fieldSelectedID] = lines[idx]
+				idx++
+			}
 		}
 		newFlds := strings.Join(fields, "\x1f")
 		tx.Exec("UPDATE notes SET flds = ? WHERE id = ?", newFlds, id)
-		idx++
+
 	}
+
 	tx.Commit()
 	fmt.Printf("✔ Applied %d translations.\n", idx)
 	return nil
