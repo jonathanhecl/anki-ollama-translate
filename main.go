@@ -147,6 +147,8 @@ func main() {
 		}
 	}
 
+	fmt.Printf("\nTranslation completed.\n")
+
 	if err := applyTranslations(db, lines); err != nil {
 		fmt.Println("❌ Error applying translations:", err)
 		return
