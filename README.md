@@ -31,6 +31,8 @@ anki-ollama-translate <apkg> [OPTIONS]
   - Select Ollama model to translate. Default: llama3.2
 - `-to="<language>"`
   - Select language to translate to. Default: español neutro
+- `-ask`
+  - Ask for manual translation when it's not complete. 
 - `-h, --help`
   - Show this help message.
 
