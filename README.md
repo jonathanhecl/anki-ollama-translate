@@ -40,6 +40,11 @@ anki-ollama-translate <apkg> [OPTIONS]
 - OPTIONAL: Llama3.2 model installed in Ollama.
 - Windows, Linux or macOS.
 
+## Recommended models
+
+- phi4 (less errors, but slower)
+- llama3.2 (faster, but more errors)
+
 ## Download
 
 You can download the latest release from [Releases](https://github.com/jonathanhecl/anki-ollama-translate/releases).
