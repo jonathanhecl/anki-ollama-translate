@@ -22,8 +22,9 @@ var (
 	fieldSelected   string = ""
 	fieldSelectedID int8   = -1
 	modelSelected   string = "llama3.2"
-	version         string = "1.0.1"
+	version         string = "1.0.2"
 	toLanguage      string = "español neutro"
+	askTranslation  bool   = false
 )
 
 func printUsage() {
@@ -33,6 +34,7 @@ func printUsage() {
 	fmt.Println("  -field=\"<field_name>\" \tSelect field to translate.")
 	fmt.Println("  -model=\"<model_name>\" \tSelect Ollama model to translate. Default: llama3.2")
 	fmt.Println("  -to=\"<language>\" \tSelect language to translate to. Default: español neutro")
+	fmt.Println("  -ask \tAsk for manual translation when it's not complete.")
 	fmt.Println("  -h, --help \tShow this help message.")
 	os.Exit(1)
 }
@@ -57,6 +59,8 @@ func main() {
 			modelSelected = arg[len("-model="):]
 		} else if strings.HasPrefix(arg, "-to=") {
 			toLanguage = arg[len("-to="):]
+		} else if strings.HasPrefix(arg, "-ask") {
+			askTranslation = true
 		} else if strings.HasPrefix(arg, "-") {
 			fmt.Println("❌ Invalid parameter:", arg)
 			printUsage()
@@ -316,6 +320,12 @@ Translate the following text to ` + toLanguage + `:
 		// fmt.Println("❌ Translation too short:", output.Translation)
 		if translatedLine == output.Translation {
 			fmt.Println("❌ Not translated:", originalLine)
+			if askTranslation {
+				userTranslation := getUserTranslation(originalLine)
+				if len(userTranslation) > 0 {
+					return userTranslation
+				}
+			}
 			return originalLine // Avoid infinite loop
 		}
 		return translateLine(g, originalLine, output.Translation)
@@ -351,4 +361,13 @@ func applyTranslations(db *sql.DB, lines []string) error {
 	tx.Commit()
 	fmt.Printf("✔ Applied %d translations.\n", idx)
 	return nil
+}
+
+func getUserTranslation(originalLine string) string {
+	fmt.Println("👁️ Original:", originalLine)
+	var translation string
+	fmt.Println("✏️ Input your translation:")
+	fmt.Scanln(&translation)
+	fmt.Println("✅ Translation:", translation)
+	return translation
 }
