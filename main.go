@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jonathanhecl/gollama"
@@ -21,7 +22,7 @@ var (
 	fieldSelected   string = ""
 	fieldSelectedID int8   = -1
 	modelSelected   string = "llama3.2"
-	version         string = "1.0.0"
+	version         string = "1.0.1"
 	toLanguage      string = "español neutro"
 )
 
@@ -142,7 +143,7 @@ func main() {
 		}
 
 		progress.Step(1)
-		lines[i] = translateLine(g, line)
+		lines[i] = translateLine(g, line, "")
 	}
 
 	fmt.Printf("\nTranslation completed.\n")
@@ -264,13 +265,35 @@ func extractLines(db *sql.DB, fieldSelectedID int8) []string {
 	return lines
 }
 
-func translateLine(g *gollama.Gollama, line string) string {
+func translateLine(g *gollama.Gollama, originalLine, translatedLine string) string {
+	if len(originalLine) < 2 { // Skip short lines
+		return originalLine
+	}
+
 	translateCtx := context.Background()
-	prompt := `You are translating a Anki card.
-Preserve the original formatting. Do not add any additional formatting.
-Do not add any additional text.
+	prompt := `You are a translator. You are translating a Anki card.
+	* Don't remove any tag, <>, [], :, ->, everything.
+	* Don't remove any example of other language.
+	* Don't convert any HTML tag to markdown or any other format.
+	* Please be as accurate as possible.
+	* Return a JSON object with a "Translation" key, in one line.`
+	if len(translatedLine) > 0 {
+		prompt += `* The original text has ` + strconv.Itoa(len(originalLine)) + ` characters.
+		* The result of the previous translation has ` + strconv.Itoa(len(translatedLine)) + ` characters.
+		* We believe you missed some translation.
+		* Include all the characters you think are missing in the translation.
+		* You previous translation was incomplete, try again.
+		Previous translation: 
+		
+		` + translatedLine + `
+	`
+	}
+
+	prompt += `
 Translate the following text to ` + toLanguage + `:
-"` + line + `"`
+
+` + originalLine + `
+`
 
 	type outputType struct {
 		Translation string `description:"Translation"`
@@ -287,6 +310,17 @@ Translate the following text to ` + toLanguage + `:
 		log.Fatal("❌ Error decoding response:", err)
 		return ""
 	}
+
+	// fmt.Println("✅ Original:", originalLine)
+	if len(output.Translation) < (len(originalLine) / 2) {
+		// fmt.Println("❌ Translation too short:", output.Translation)
+		if translatedLine == output.Translation {
+			fmt.Println("❌ Not translated:", originalLine)
+			return originalLine // Avoid infinite loop
+		}
+		return translateLine(g, originalLine, output.Translation)
+	}
+	// fmt.Println("✅ Translation:", output.Translation)
 
 	return output.Translation
 }
