@@ -22,7 +22,7 @@ var (
 	fieldSelected   string = ""
 	fieldSelectedID int8   = -1
 	modelSelected   string = "llama3.2"
-	version         string = "1.0.2"
+	version         string = "1.0.3"
 	toLanguage      string = "español neutro"
 	askTranslation  bool   = false
 )
