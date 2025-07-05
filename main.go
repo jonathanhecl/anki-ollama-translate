@@ -79,9 +79,15 @@ func main() {
 	// Ollama
 	ctx := context.Background()
 	g := gollama.New(modelSelected)
-	if err := g.PullIfMissing(ctx); err != nil {
-		fmt.Println("❌ Error pulling Ollama model:", err)
-		return
+	if found, _ := g.HasModel(ctx, modelSelected); !found {
+		fmt.Println("❌ Ollama model not found:", modelSelected)
+		if err := g.PullIfMissing(ctx); err != nil {
+			fmt.Println("❌ Error pulling Ollama model:", err)
+			return
+		}
+		fmt.Println("✅ Ollama model downloaded:", modelSelected)
+	} else {
+		fmt.Println("✅ Ollama model found:", modelSelected)
 	}
 
 	// Requirements
