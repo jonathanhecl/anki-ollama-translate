@@ -375,5 +375,11 @@ func getUserTranslation(originalLine string) string {
 	fmt.Println("✏️ Input your translation:")
 	fmt.Scanln(&translation)
 	fmt.Println("✅ Translation:", translation)
+	fmt.Println("Accept translation? (y/n)")
+	var accept string
+	fmt.Scanln(&accept)
+	if accept != "y" {
+		return getUserTranslation(originalLine)
+	}
 	return translation
 }
