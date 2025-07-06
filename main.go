@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -21,8 +22,9 @@ var (
 	tempDB          string
 	fieldSelected   string = ""
 	fieldSelectedID int8   = -1
+	sequenceID      int64  = -1
 	modelSelected   string = "llama3.2"
-	version         string = "1.0.3"
+	version         string = "1.0.4"
 	toLanguage      string = "español neutro"
 	askTranslation  bool   = false
 )
@@ -91,8 +93,8 @@ func main() {
 	}
 
 	// Requirements
-	if check && fieldSelected != "" || !check && fieldSelected == "" {
-		fmt.Println("❌ Invalid parameters: -check or -field are mutually exclusive.")
+	if !check && fieldSelected == "" {
+		fmt.Println("❌ Invalid parameters: -check or -field are required.")
 		printUsage()
 	}
 
@@ -148,12 +150,12 @@ func main() {
 	progress.Value(0)
 
 	for i, line := range lines {
-		if i%25 == 0 {
+		if progress.GetValue()%25 == 0 {
 			fmt.Printf("\nTranslation progress: %s %s lines (%s) - Total time: %s - Time left: %s\n", progress.GetProgressBar(50), progress.GetProgressValues(), progress.GetProgress(0), progress.GetTimeSpent().String(), progress.GetTimeLeft().String())
 		}
 
 		progress.Step(1)
-		lines[i] = translateLine(g, line, "")
+		lines[i] = translateLine(g, i, line, "")
 	}
 
 	fmt.Printf("\nTranslation completed.\n")
@@ -188,6 +190,9 @@ func findFieldID(db *sql.DB, fieldName string) int8 {
 		fields := model["flds"].([]interface{})
 		for i, f := range fields {
 			name := f.(map[string]interface{})["name"].(string)
+			if strings.EqualFold(name, "Sequence") {
+				sequenceID = int64(i)
+			}
 			if strings.EqualFold(name, fieldName) {
 				return int8(i)
 			}
@@ -248,7 +253,7 @@ func checkFields(db *sql.DB) {
 	fmt.Println("✅ All fields checked.")
 }
 
-func extractLines(db *sql.DB, fieldSelectedID int8) []string {
+func extractLines(db *sql.DB, fieldSelectedID int8) map[int64]string {
 	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
 	if err != nil {
 		fmt.Println("❌ Error on SELECT flds FROM notes:", err)
@@ -256,7 +261,7 @@ func extractLines(db *sql.DB, fieldSelectedID int8) []string {
 	}
 	defer rows.Close()
 
-	var lines []string
+	lines := map[int64]string{}
 	for rows.Next() {
 		var flds string
 		if err := rows.Scan(&flds); err != nil {
@@ -266,16 +271,18 @@ func extractLines(db *sql.DB, fieldSelectedID int8) []string {
 		fields := strings.Split(flds, "\x1f")
 		if len(fields) > 1 {
 			if int(fieldSelectedID) < len(fields) {
-				lines = append(lines, fields[fieldSelectedID])
+				id, _ := strconv.ParseInt(fields[1], 10, 64)
+				lines[id] = fields[fieldSelectedID]
 			}
 		} else {
-			lines = append(lines, "")
+			id, _ := strconv.ParseInt(fields[1], 10, 64)
+			lines[id] = ""
 		}
 	}
 	return lines
 }
 
-func translateLine(g *gollama.Gollama, originalLine, translatedLine string) string {
+func translateLine(g *gollama.Gollama, id int64, originalLine, translatedLine string) string {
 	if len(originalLine) < 2 { // Skip short lines
 		return originalLine
 	}
@@ -325,23 +332,23 @@ Translate the following text to ` + toLanguage + `:
 	if len(output.Translation) < (len(originalLine) / 2) {
 		// fmt.Println("❌ Translation too short:", output.Translation)
 		if translatedLine == output.Translation {
-			fmt.Println("❌ Not translated:", originalLine)
 			if askTranslation {
-				userTranslation := getUserTranslation(originalLine)
+				userTranslation := getUserTranslation(id, originalLine)
 				if len(userTranslation) > 0 {
 					return userTranslation
 				}
 			}
+			fmt.Println("❌ Not translated [", id, "]:", originalLine)
 			return originalLine // Avoid infinite loop
 		}
-		return translateLine(g, originalLine, output.Translation)
+		return translateLine(g, id, originalLine, output.Translation)
 	}
 	// fmt.Println("✅ Translation:", output.Translation)
 
 	return output.Translation
 }
 
-func applyTranslations(db *sql.DB, lines []string) error {
+func applyTranslations(db *sql.DB, lines map[int64]string) error {
 
 	rows, _ := db.Query("SELECT id, flds FROM notes ORDER BY id")
 	defer rows.Close()
@@ -355,7 +362,7 @@ func applyTranslations(db *sql.DB, lines []string) error {
 		fields := strings.Split(flds, "\x1f")
 		if len(fields) > 1 && idx < len(lines) {
 			if len(fields) > int(fieldSelectedID) {
-				fields[fieldSelectedID] = lines[idx]
+				fields[fieldSelectedID] = lines[id]
 				idx++
 			}
 		}
@@ -369,17 +376,39 @@ func applyTranslations(db *sql.DB, lines []string) error {
 	return nil
 }
 
-func getUserTranslation(originalLine string) string {
-	fmt.Println("👁️ Original:", originalLine)
-	var translation string
-	fmt.Println("✏️ Input your translation:")
-	fmt.Scanln(&translation)
-	fmt.Println("✅ Translation:", translation)
-	fmt.Println("Accept translation? (y/n)")
-	var accept string
-	fmt.Scanln(&accept)
-	if accept != "y" {
-		return getUserTranslation(originalLine)
+func getUserTranslation(id int64, originalLine string) string {
+	reader := bufio.NewReader(os.Stdin)
+	for {
+		fmt.Println("Can't translate this line. Please translate it manually.")
+		fmt.Println("👁️ Original [", id, "]:", originalLine)
+		fmt.Print("✏️ Input your translation: ")
+		translation, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("\n⚠️ Error reading input:", err)
+			continue
+		}
+		translation = strings.TrimSpace(translation)
+		if translation == "" {
+			fmt.Println("⚠️ Translation cannot be empty. Please try again.")
+			continue
+		}
+		fmt.Println("✅ Translation:", translation)
+
+		for {
+			fmt.Print("Accept translation? (y/n): ")
+			accept, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("\n⚠️ Error reading input:", err)
+				continue
+			}
+			accept = strings.TrimSpace(strings.ToLower(accept))
+			if accept == "y" {
+				return translation
+			} else if accept == "n" {
+				break
+			} else {
+				fmt.Println("⚠️ Please enter 'y' or 'n'")
+			}
+		}
 	}
-	return translation
 }
