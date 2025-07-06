@@ -25,7 +25,7 @@ var (
 	sequenceID      int64  = -1
 	modelSelected   string = "llama3.2"
 	version         string = "1.0.4"
-	fromLanguage    string = "english"
+	fromLanguage    string = ""
 	toLanguage      string = "español neutro"
 	askTranslation  bool   = false
 )
@@ -36,7 +36,7 @@ func printUsage() {
 	fmt.Println("  -check \tCheck all fields before translation.")
 	fmt.Println("  -field=\"<field_name>\" \tSelect field to translate.")
 	fmt.Println("  -model=\"<model_name>\" \tSelect Ollama model to translate. Default: llama3.2")
-	fmt.Println("  -from=\"<language>\" \tSelect language to translate from. Default: english")
+	fmt.Println("  -from=\"<language>\" \tSelect language to translate from. Default: auto-detect")
 	fmt.Println("  -to=\"<language>\" \tSelect language to translate to. Default: español neutro")
 	fmt.Println("  -ask \tAsk for manual translation when it's not complete.")
 	fmt.Println("  -h, --help \tShow this help message.")
@@ -308,6 +308,11 @@ func translateLine(g *gollama.Gollama, id int64, originalLine, translatedLine st
 		
 		` + translatedLine + `
 	`
+	}
+
+	if fromLanguage != "" {
+		prompt += `* The original text is in ` + fromLanguage + `.`
+		prompt += `* Don't translate other languages than ` + fromLanguage + `.`
 	}
 
 	prompt += `
