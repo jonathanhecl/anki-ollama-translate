@@ -29,6 +29,8 @@ anki-ollama-translate <apkg> [OPTIONS]
   - Select field to translate.
 - `-model="<model_name>"`
   - Select Ollama model to translate. Default: llama3.2
+- `-from="<language>"`
+  - Select language to translate from. Default: auto-detect
 - `-to="<language>"`
   - Select language to translate to. Default: español neutro
 - `-ask`
