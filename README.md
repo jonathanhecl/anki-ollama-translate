@@ -34,7 +34,7 @@ anki-ollama-translate <apkg> [OPTIONS]
 - `-to="<language>"`
   - Select language to translate to. Default: español neutro
 - `-ask`
-  - Ask for manual translation when it's not complete. 
+  - To ask for a manual translation when the AI translation cannot do it.
 - `-h, --help`
   - Show this help message.
 
