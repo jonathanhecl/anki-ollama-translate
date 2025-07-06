@@ -25,6 +25,7 @@ var (
 	sequenceID      int64  = -1
 	modelSelected   string = "llama3.2"
 	version         string = "1.0.4"
+	fromLanguage    string = "english"
 	toLanguage      string = "español neutro"
 	askTranslation  bool   = false
 )
@@ -35,6 +36,7 @@ func printUsage() {
 	fmt.Println("  -check \tCheck all fields before translation.")
 	fmt.Println("  -field=\"<field_name>\" \tSelect field to translate.")
 	fmt.Println("  -model=\"<model_name>\" \tSelect Ollama model to translate. Default: llama3.2")
+	fmt.Println("  -from=\"<language>\" \tSelect language to translate from. Default: english")
 	fmt.Println("  -to=\"<language>\" \tSelect language to translate to. Default: español neutro")
 	fmt.Println("  -ask \tAsk for manual translation when it's not complete.")
 	fmt.Println("  -h, --help \tShow this help message.")
@@ -59,6 +61,8 @@ func main() {
 			fieldSelected = arg[len("-field="):]
 		} else if strings.HasPrefix(arg, "-model=") {
 			modelSelected = arg[len("-model="):]
+		} else if strings.HasPrefix(arg, "-from=") {
+			fromLanguage = arg[len("-from="):]
 		} else if strings.HasPrefix(arg, "-to=") {
 			toLanguage = arg[len("-to="):]
 		} else if strings.HasPrefix(arg, "-ask") {
