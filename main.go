@@ -148,6 +148,12 @@ func main() {
 
 	fmt.Println("✅ Field found:", fieldSelected, "[", fieldSelectedID, "]")
 
+	if len(fromLanguage) > 0 {
+		fmt.Println("⌚ Translating from", fromLanguage, "to", toLanguage)
+	} else {
+		fmt.Println("⌚ Translating to", toLanguage)
+	}
+
 	lines := extractLines(db, fieldSelectedID)
 
 	progress := gotimeleft.Init(len(lines))
