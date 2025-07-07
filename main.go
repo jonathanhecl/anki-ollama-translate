@@ -343,9 +343,7 @@ Translate the following text to ` + toLanguage + `:
 		return ""
 	}
 
-	// fmt.Println("✅ Original:", originalLine)
 	if len(output.Translation) < (len(originalLine) / 2) {
-		// fmt.Println("❌ Translation too short:", output.Translation)
 		if translatedLine == output.Translation {
 			if askTranslation {
 				userTranslation := getUserTranslation(id, originalLine)
@@ -359,7 +357,6 @@ Translate the following text to ` + toLanguage + `:
 		}
 		return translateLine(g, id, originalLine, output.Translation)
 	}
-	// fmt.Println("✅ Translation:", output.Translation)
 
 	return output.Translation
 }
