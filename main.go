@@ -350,6 +350,7 @@ Translate the following text to ` + toLanguage + `:
 			if askTranslation {
 				userTranslation := getUserTranslation(id, originalLine)
 				if len(userTranslation) > 0 {
+					fmt.Println("✅ Translation saved:", userTranslation)
 					return userTranslation
 				}
 			}
