@@ -10,6 +10,8 @@ github.com/jonathanhecl/gotimeleft v0.0.2 h1:icc0MmxdrB9ZIt2cf6cQIJkUxbWKyxMmElY
 github.com/jonathanhecl/gotimeleft v0.0.2/go.mod h1:5xgngX2wWmPCfMXrNvQCWvgJ/3d5KiWWPiqGRpwiWQg=
 github.com/jonathanhecl/gotimeleft v0.0.3 h1:amEFxC/xKvD6JgvQwTpYHy/ni2jj+Juuhmxtl1qBIv0=
 github.com/jonathanhecl/gotimeleft v0.0.3/go.mod h1:5xgngX2wWmPCfMXrNvQCWvgJ/3d5KiWWPiqGRpwiWQg=
+github.com/jonathanhecl/gotimeleft v0.0.4 h1:+MGgnOYeTOVBo/PRvPgS0X6LEnlfVJOjlT+/dZWre9k=
+github.com/jonathanhecl/gotimeleft v0.0.4/go.mod h1:5xgngX2wWmPCfMXrNvQCWvgJ/3d5KiWWPiqGRpwiWQg=
 github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWEY=
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdhx/f4=
