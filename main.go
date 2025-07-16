@@ -24,10 +24,11 @@ var (
 	fieldSelectedID int8   = -1
 	sequenceID      int64  = -1
 	modelSelected   string = "llama3.2"
-	version         string = "1.0.5"
+	version         string = "1.0.6"
 	fromLanguage    string = ""
 	toLanguage      string = "español neutro"
 	askTranslation  bool   = false
+	verbose         bool   = false
 )
 
 func printUsage() {
@@ -39,6 +40,7 @@ func printUsage() {
 	fmt.Println("  -from=\"<language>\" \tSelect language to translate from. Default: auto-detect")
 	fmt.Println("  -to=\"<language>\" \tSelect language to translate to. Default: español neutro")
 	fmt.Println("  -ask \tAsk for manual translation when it's not complete.")
+	fmt.Println("  -v \tEnable verbose mode. This can make the process slower.")
 	fmt.Println("  -h, --help \tShow this help message.")
 	os.Exit(1)
 }
@@ -67,6 +69,8 @@ func main() {
 			toLanguage = arg[len("-to="):]
 		} else if strings.HasPrefix(arg, "-ask") {
 			askTranslation = true
+		} else if strings.HasPrefix(arg, "-v") {
+			verbose = true
 		} else if strings.HasPrefix(arg, "-") {
 			fmt.Println("❌ Invalid parameter:", arg)
 			printUsage()
@@ -103,6 +107,7 @@ func main() {
 	}
 
 	fmt.Println("✅ APKG found:", origApkg)
+	fmt.Println("✅ New APKG will be saved:", newApkgOutput)
 
 	tempDB = normalizeFileName(origApkg, "_temp.anki2")
 	if err := unzipCollection(origApkg, tempDB); err != nil {
@@ -148,6 +153,10 @@ func main() {
 
 	fmt.Println("✅ Field found:", fieldSelected, "[", fieldSelectedID, "]")
 
+	if verbose {
+		fmt.Println("✅ Verbose mode enabled.")
+	}
+
 	if len(fromLanguage) > 0 {
 		fmt.Println("⌚ Translating from", fromLanguage, "to", toLanguage)
 	} else {
@@ -166,6 +175,9 @@ func main() {
 
 		progress.Step(1)
 		lines[i] = translateLine(g, i, line, "")
+		if verbose {
+			fmt.Println("✅ Translated [", i, "]: \"", line, "\" -> \"", lines[i], "\"")
+		}
 	}
 
 	fmt.Printf("\nTranslation completed.\n")
@@ -299,9 +311,10 @@ func translateLine(g *gollama.Gollama, id int64, originalLine, translatedLine st
 
 	translateCtx := context.Background()
 	prompt := `You are a translator. You are translating a Anki card.
-	* Don't remove any tag, <>, [], :, ->, everything.
-	* Don't remove any example of other language.
+	* Don't remove any tag, <>, [], :, ->, etc.
+	* Don't remove any example of other languages.
 	* Don't convert any HTML tag to markdown or any other format.
+	* Remember to keep the same format but translate the text, alike [I] to [Yo].
 	* Please be as accurate as possible.
 	* Return a JSON object with a "Translation" key, in one line.`
 	if len(translatedLine) > 0 {
@@ -346,6 +359,7 @@ Translate the following text to ` + toLanguage + `:
 	if len(output.Translation) < (len(originalLine) / 2) {
 		if translatedLine == output.Translation {
 			if askTranslation {
+				fmt.Println("⚠️ Translation not complete [", id, "]:", output.Translation)
 				userTranslation := getUserTranslation(id, originalLine)
 				if len(userTranslation) > 0 {
 					fmt.Println("✅ Translation saved:", userTranslation)

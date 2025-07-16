@@ -4,7 +4,7 @@ A simple tool to translate Anki cards using Ollama (https://ollama.com/).
 
 You can use it to translate your Anki decks to another language using AI models.
 
-## ⚠️ Important
+## ⚠️ Important for exports
 
 - This tool only works with Anki package files (.apkg) exported in the legacy format.
 - **How to export your deck correctly in Anki**:
@@ -14,6 +14,14 @@ You can use it to translate your Anki decks to another language using AI models.
   4. **IMPORTANT**: Check the option "Compatibility with older Anki versions (slower/larger files)"
   5. Make sure "Include media" is checked if your cards have images/audio
   6. Click "Export" and save the file
+
+## ⚠️ Important for import
+  1. Open Anki
+  2. Go to `File` > `Import...`
+  3. Select your deck from the dropdown
+  4. Set format to "Anki Deck Package (*.apkg)"
+  5. Make sure "Include media" is checked if your cards have images/audio
+  6. Click "Import" and save the file
 
 ## 🛠️ Usage
 
@@ -35,6 +43,8 @@ anki-ollama-translate <apkg> [OPTIONS]
   - Select language to translate to. Default: español neutro
 - `-ask`
   - To ask for a manual translation when the AI translation cannot do it.
+- `-v`
+  - Enable verbose mode. This can make the process slower.
 - `-h, --help`
   - Show this help message.
 
