@@ -32,9 +32,11 @@ anki-ollama-translate <apkg> [OPTIONS]
 ### Options
 
 - `-check`
-  - Check all fields before translation. This is useful to see the fields names.
+  - Check all fields before translation. This is useful to see the fields names. (Can be combined with -type and -field)
+- `-type="<type_name>"`
+  - Select type to translate. Default: all types (Can be combined with -check)
 - `-field="<field_name>"`
-  - Select field to translate.
+  - Select field to translate. (Can be combined with -check)
 - `-model="<model_name>"`
   - Select Ollama model to translate. Default: llama3.2
 - `-from="<language>"`
@@ -47,6 +49,11 @@ anki-ollama-translate <apkg> [OPTIONS]
   - Enable verbose mode. This can make the process slower.
 - `-h, --help`
   - Show this help message.
+
+## Understanding the check results
+
+When you use the `-check` option, the tool will show you the type and fields names and their content. This is useful to see the fields names.
+Ej. `Type / Field [ Order ] Content`
 
 ## Requirements
 

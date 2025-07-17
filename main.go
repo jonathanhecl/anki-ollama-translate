@@ -20,8 +20,10 @@ var (
 	origApkg        string
 	newApkgOutput   string
 	tempDB          string
+	typeSelected    string = ""
+	typeSelectedID  string = ""
 	fieldSelected   string = ""
-	fieldSelectedID int8   = -1
+	fieldSelectedID int    = -1
 	sequenceID      int64  = -1
 	modelSelected   string = "llama3.2"
 	version         string = "1.0.6"
@@ -35,6 +37,7 @@ func printUsage() {
 	fmt.Println("Usage: anki-ollama-translate <apkg> [OPTIONS]")
 	fmt.Println("Options:")
 	fmt.Println("  -check \tCheck all fields before translation.")
+	fmt.Println("  -type=\"<type_name>\" \tSelect type to translate. Default: all types")
 	fmt.Println("  -field=\"<field_name>\" \tSelect field to translate.")
 	fmt.Println("  -model=\"<model_name>\" \tSelect Ollama model to translate. Default: llama3.2")
 	fmt.Println("  -from=\"<language>\" \tSelect language to translate from. Default: auto-detect")
@@ -59,6 +62,8 @@ func main() {
 			printUsage()
 		} else if strings.EqualFold(arg, "-check") {
 			check = true
+		} else if strings.HasPrefix(arg, "-type=") {
+			typeSelected = arg[len("-type="):]
 		} else if strings.HasPrefix(arg, "-field=") {
 			fieldSelected = arg[len("-field="):]
 		} else if strings.HasPrefix(arg, "-model=") {
@@ -145,12 +150,19 @@ func main() {
 		return
 	}
 
-	fieldSelectedID = findFieldID(db, fieldSelected)
-	if fieldSelectedID == -1 {
+	typeSelectedID, fieldSelectedID = findTypeFieldID(db)
+	if typeSelectedID == "" && typeSelected != "" {
+		fmt.Println("❌ Type not found:", typeSelected)
+		return
+	}
+	if fieldSelectedID == -1 && fieldSelected != "" {
 		fmt.Println("❌ Field not found:", fieldSelected)
 		return
 	}
 
+	if typeSelectedID != "" {
+		fmt.Println("✅ Type found:", typeSelected, "[", typeSelectedID, "]")
+	}
 	fmt.Println("✅ Field found:", fieldSelected, "[", fieldSelectedID, "]")
 
 	if verbose {
@@ -163,7 +175,7 @@ func main() {
 		fmt.Println("⌚ Translating to", toLanguage)
 	}
 
-	lines := extractLines(db, fieldSelectedID)
+	lines := extractLines(db)
 
 	progress := gotimeleft.Init(len(lines))
 	progress.Value(0)
@@ -176,7 +188,7 @@ func main() {
 		progress.Step(1)
 		lines[i] = translateLine(g, i, line, "")
 		if verbose {
-			fmt.Println("✅ Translated [", i, "]: \"", line, "\" -> \"", lines[i], "\"")
+			fmt.Println("✅ Translated [", i, "]: \"", line, "\" 🧙👉 \"", lines[i], "\"")
 		}
 	}
 
@@ -194,7 +206,7 @@ func main() {
 	fmt.Println("✔ New APKG generated:", newApkgOutput)
 }
 
-func findFieldID(db *sql.DB, fieldName string) int8 {
+func findTypeFieldID(db *sql.DB) (string, int) {
 	var raw string
 	err := db.QueryRow("SELECT models FROM col").Scan(&raw)
 	if err != nil {
@@ -207,21 +219,30 @@ func findFieldID(db *sql.DB, fieldName string) int8 {
 		panic(err)
 	}
 
-	for _, modelData := range models {
+	typeID := ""
+	fieldID := -1
+
+	for id, modelData := range models {
 		model := modelData.(map[string]interface{})
+
+		if typeSelected != "" {
+			if !strings.EqualFold(model["name"].(string), typeSelected) {
+				continue
+			} else {
+				typeID = id
+			}
+		}
+
 		fields := model["flds"].([]interface{})
 		for i, f := range fields {
 			name := f.(map[string]interface{})["name"].(string)
-			if strings.EqualFold(name, "Sequence") {
-				sequenceID = int64(i)
-			}
-			if strings.EqualFold(name, fieldName) {
-				return int8(i)
+			if strings.EqualFold(name, fieldSelected) {
+				fieldID = i
 			}
 		}
 	}
 
-	return -1
+	return typeID, fieldID
 }
 
 func checkFields(db *sql.DB) {
@@ -231,17 +252,26 @@ func checkFields(db *sql.DB) {
 		panic(err)
 	}
 
+	type tModel struct {
+		Name   string
+		ID     string
+		Fields map[int]string
+	}
+
+	cModels := []tModel{}
+
 	var models map[string]interface{}
 	err = json.Unmarshal([]byte(raw), &models)
 	if err != nil {
 		panic(err)
 	}
 
-	fieldName := map[int]string{}
-
-	for _, modelData := range models {
+	for id, modelData := range models {
 		model := modelData.(map[string]interface{})
+
 		fields := model["flds"].([]interface{})
+
+		fieldName := map[int]string{}
 		for i, f := range fields {
 			name := f.(map[string]interface{})["name"].(string)
 			if len(fieldName[i]) > 0 {
@@ -249,25 +279,45 @@ func checkFields(db *sql.DB) {
 			}
 			fieldName[i] = name
 		}
-	}
 
-	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
-	if err != nil {
-		fmt.Println("❌ Error on SELECT flds FROM notes:", err)
-		os.Exit(1)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var flds string
-		if err := rows.Scan(&flds); err != nil {
-			fmt.Println("❌ Error scanning row:", err)
-			continue
+		if typeSelected != "" {
+			if !strings.EqualFold(model["name"].(string), typeSelected) {
+				continue
+			}
 		}
-		fields := strings.Split(flds, "\x1f")
-		for i, f := range fields {
-			if len(fieldName[i]) > 0 {
-				fmt.Println(fieldName[i], "[", i, "]", f)
+
+		cModels = append(cModels, tModel{
+			Name:   model["name"].(string),
+			ID:     id,
+			Fields: fieldName,
+		})
+	}
+
+	for _, model := range cModels {
+		rows, err := db.Query("SELECT flds FROM notes WHERE mid = ? ORDER BY id", model.ID)
+		if err != nil {
+			fmt.Println("❌ Error on SELECT flds FROM notes:", err)
+			os.Exit(1)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var flds string
+			if err := rows.Scan(&flds); err != nil {
+				fmt.Println("❌ Error scanning row:", err)
+				continue
+			}
+
+			fields := strings.Split(flds, "\x1f")
+			for i, f := range fields {
+				if len(model.Fields[i]) > 0 {
+					if fieldSelected != "" {
+						if !strings.EqualFold(model.Fields[i], fieldSelected) {
+							continue
+						}
+					}
+					fmt.Println(model.Name, " / ", model.Fields[i], "[", i, "]", f)
+				}
 			}
 		}
 	}
@@ -275,8 +325,8 @@ func checkFields(db *sql.DB) {
 	fmt.Println("✅ All fields checked.")
 }
 
-func extractLines(db *sql.DB, fieldSelectedID int8) map[int64]string {
-	rows, err := db.Query("SELECT flds FROM notes ORDER BY id")
+func extractLines(db *sql.DB) map[int64]string {
+	rows, err := db.Query("SELECT mid, flds FROM notes ORDER BY id")
 	if err != nil {
 		fmt.Println("❌ Error on SELECT flds FROM notes:", err)
 		os.Exit(1)
@@ -285,11 +335,19 @@ func extractLines(db *sql.DB, fieldSelectedID int8) map[int64]string {
 
 	lines := map[int64]string{}
 	for rows.Next() {
+		var mid string
 		var flds string
-		if err := rows.Scan(&flds); err != nil {
+		if err := rows.Scan(&mid, &flds); err != nil {
 			fmt.Println("❌ Error scanning row:", err)
 			continue
 		}
+
+		if typeSelectedID != "" {
+			if !strings.EqualFold(mid, typeSelectedID) {
+				continue
+			}
+		}
+
 		fields := strings.Split(flds, "\x1f")
 		if len(fields) > 1 {
 			if int(fieldSelectedID) < len(fields) {
@@ -377,25 +435,33 @@ Translate the following text to ` + toLanguage + `:
 
 func applyTranslations(db *sql.DB, lines map[int64]string) error {
 
-	rows, _ := db.Query("SELECT id, flds FROM notes ORDER BY id")
+	rows, _ := db.Query("SELECT id, mid, flds FROM notes ORDER BY id")
 	defer rows.Close()
 
 	tx, _ := db.Begin()
 	idx := 0
 	for rows.Next() {
 		var id int64
+		var mid string
 		var flds string
-		rows.Scan(&id, &flds)
+		rows.Scan(&id, &mid, &flds)
 		fields := strings.Split(flds, "\x1f")
+
+		if typeSelectedID != "" {
+			if !strings.EqualFold(mid, typeSelectedID) {
+				continue
+			}
+		}
+
 		if len(fields) > 1 && idx < len(lines) {
 			if len(fields) > int(fieldSelectedID) {
 				fields[fieldSelectedID] = lines[id]
 				idx++
 			}
 		}
+
 		newFlds := strings.Join(fields, "\x1f")
 		tx.Exec("UPDATE notes SET flds = ? WHERE id = ?", newFlds, id)
-
 	}
 
 	tx.Commit()
