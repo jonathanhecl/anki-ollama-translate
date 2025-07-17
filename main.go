@@ -26,7 +26,7 @@ var (
 	fieldSelectedID int    = -1
 	sequenceID      int64  = -1
 	modelSelected   string = "llama3.2"
-	version         string = "1.0.6"
+	version         string = "1.0.7"
 	fromLanguage    string = ""
 	toLanguage      string = "español neutro"
 	askTranslation  bool   = false
