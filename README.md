@@ -23,7 +23,7 @@ You can use it to translate your Anki decks to another language using AI models.
   5. Make sure "Include media" is checked if your cards have images/audio
   6. Click "Import" and save the file
 
-If you have any issues with the import, try to do `Tools` -> `Check Database` first.
+If you have any issues with the import, try to do `Tools` > `Check Database` first.
 
 ## 🛠️ Usage
 
